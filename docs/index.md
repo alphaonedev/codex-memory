@@ -93,4 +93,4 @@ Licensed under MIT. Copyright 2026 AlphaOne LLC.
 
 ## Repo publishing
 
-This project is structured for a public GitHub repo. Enable GitHub Pages from the `docs/` folder to publish this page directly.
+This project is structured for a public GitHub repo. The repository ships a GitHub Actions Pages deployment workflow that publishes the site from `docs/`.
