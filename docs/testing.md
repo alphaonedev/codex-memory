@@ -33,8 +33,8 @@ The repository includes explicit automated test code:
 - [src/api.rs](../src/api.rs): API flow and transcript-ingest tests
 - [src/storage.rs](../src/storage.rs): storage, lifecycle, retrieval, project isolation, and prompt-packing tests
 - [src/service.rs](../src/service.rs): daemon startup and healthcheck test
-- [src/model.rs](../src/model.rs): request/model default behavior tests
-- [src/ingest.rs](../src/ingest.rs): transcript extraction and query expansion tests
+- [src/model.rs](../src/model.rs): request/model defaults and validation tests
+- [src/ingest.rs](../src/ingest.rs): transcript extraction, Codex-session parsing, and ingestion-filter tests
 - [src/toon.rs](../src/toon.rs): TOON encoding tests
 - [src/config.rs](../src/config.rs): config loading and directory creation tests
 
@@ -73,6 +73,8 @@ The test suite is intended to cover:
 
 - storage and retrieval behavior
 - transcript ingestion and automatic capture
+- request validation before SQLite writes
+- Codex-session JSONL extraction and filtering
 - exact tag filtering
 - expiry and pruning behavior
 - lifecycle operations: capture, update, reinforce, archive, delete

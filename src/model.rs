@@ -3,6 +3,7 @@
 //
 // Shared domain model for stored memories, search, prompt export, and stats.
 
+use anyhow::{Result, bail};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -119,6 +120,32 @@ pub struct CreateMemory {
     pub expires_at: Option<DateTime<Utc>>,
 }
 
+impl CreateMemory {
+    pub fn validate(&self) -> Result<()> {
+        if self.content.trim().is_empty() {
+            bail!("content must not be empty");
+        }
+        if self.scope.trim().is_empty() {
+            bail!("scope must not be empty");
+        }
+        if self.source.trim().is_empty() {
+            bail!("source must not be empty");
+        }
+        if !(0.0..=1.0).contains(&self.confidence) {
+            bail!("confidence must be between 0.0 and 1.0");
+        }
+        if self.priority < 0 || self.priority > 100 {
+            bail!("priority must be between 0 and 100");
+        }
+        if let Some(summary) = &self.summary
+            && summary.trim().is_empty()
+        {
+            bail!("summary must not be empty when provided");
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UpdateMemory {
     #[serde(default)]
@@ -155,6 +182,43 @@ pub struct UpdateMemory {
     pub archived: Option<bool>,
     #[serde(default)]
     pub expires_at: Option<Option<DateTime<Utc>>>,
+}
+
+impl UpdateMemory {
+    pub fn validate(&self) -> Result<()> {
+        if let Some(content) = &self.content
+            && content.trim().is_empty()
+        {
+            bail!("content must not be empty when provided");
+        }
+        if let Some(summary) = &self.summary
+            && let Some(summary) = summary
+            && summary.trim().is_empty()
+        {
+            bail!("summary must not be empty when provided");
+        }
+        if let Some(scope) = &self.scope
+            && scope.trim().is_empty()
+        {
+            bail!("scope must not be empty when provided");
+        }
+        if let Some(source) = &self.source
+            && source.trim().is_empty()
+        {
+            bail!("source must not be empty when provided");
+        }
+        if let Some(confidence) = self.confidence
+            && !(0.0..=1.0).contains(&confidence)
+        {
+            bail!("confidence must be between 0.0 and 1.0");
+        }
+        if let Some(priority) = self.priority
+            && !(0..=100).contains(&priority)
+        {
+            bail!("priority must be between 0 and 100");
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -274,6 +338,18 @@ pub struct TranscriptMessage {
     pub content: String,
 }
 
+impl TranscriptMessage {
+    pub fn validate(&self) -> Result<()> {
+        if self.role.trim().is_empty() {
+            bail!("transcript message role must not be empty");
+        }
+        if self.content.trim().is_empty() {
+            bail!("transcript message content must not be empty");
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TranscriptIngestRequest {
     pub messages: Vec<TranscriptMessage>,
@@ -287,6 +363,24 @@ pub struct TranscriptIngestRequest {
     pub mode: CaptureMode,
     #[serde(default = "default_max_ingested_memories")]
     pub max_memories: usize,
+}
+
+impl TranscriptIngestRequest {
+    pub fn validate(&self) -> Result<()> {
+        if self.messages.is_empty() {
+            bail!("transcript ingest requires at least one message");
+        }
+        if self.source.trim().is_empty() {
+            bail!("source must not be empty");
+        }
+        if self.max_memories == 0 {
+            bail!("max_memories must be greater than zero");
+        }
+        for message in &self.messages {
+            message.validate()?;
+        }
+        Ok(())
+    }
 }
 
 fn default_max_ingested_memories() -> usize {
@@ -321,7 +415,10 @@ fn default_confidence() -> f64 {
 mod tests {
     use serde_json::json;
 
-    use super::{CaptureMemory, CaptureMode, MemoryKind, PromptFormat, PromptRequest, SearchRequest};
+    use super::{
+        CaptureMemory, CaptureMode, CreateMemory, MemoryKind, PromptFormat, PromptRequest,
+        SearchRequest, TranscriptIngestRequest, TranscriptMessage, UpdateMemory,
+    };
 
     #[test]
     fn memory_kind_round_trips_through_strings() {
@@ -367,5 +464,55 @@ mod tests {
         .expect("capture");
         assert_eq!(request.mode, CaptureMode::Upsert);
         assert_eq!(request.memory.kind, MemoryKind::Fact);
+    }
+
+    #[test]
+    fn create_memory_validation_rejects_empty_content() {
+        let memory = CreateMemory {
+            content: "   ".into(),
+            summary: None,
+            kind: MemoryKind::Fact,
+            scope: "local".into(),
+            source: "manual".into(),
+            tags: Vec::new(),
+            priority: 50,
+            confidence: 0.7,
+            session: None,
+            role: None,
+            project: Default::default(),
+            expires_at: None,
+        };
+        assert!(memory.validate().is_err());
+    }
+
+    #[test]
+    fn transcript_ingest_validation_rejects_empty_messages() {
+        let request = TranscriptIngestRequest {
+            messages: Vec::new(),
+            source: "codex-session".into(),
+            session: None,
+            project: Default::default(),
+            mode: CaptureMode::Upsert,
+            max_memories: 12,
+        };
+        assert!(request.validate().is_err());
+    }
+
+    #[test]
+    fn update_validation_rejects_empty_summary() {
+        let update = UpdateMemory {
+            summary: Some(Some("   ".into())),
+            ..UpdateMemory::default()
+        };
+        assert!(update.validate().is_err());
+    }
+
+    #[test]
+    fn transcript_message_validation_rejects_blank_role() {
+        let message = TranscriptMessage {
+            role: " ".into(),
+            content: "hello".into(),
+        };
+        assert!(message.validate().is_err());
     }
 }

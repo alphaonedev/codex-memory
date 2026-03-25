@@ -190,3 +190,62 @@ fn daemon_binary_serves_health_endpoint_for_cli() {
     daemon.kill().expect("kill");
     let _ = daemon.wait();
 }
+
+#[test]
+fn ingest_codex_session_command_extracts_from_jsonl_file() {
+    let temp = tempdir().expect("tempdir");
+    let config = temp.path().join("config.toml");
+    let database = temp.path().join("memory.db");
+    let bind = reserve_bind();
+    write_config(&config, &bind, database.to_str().expect("db"));
+
+    let cli_bin = env!("CARGO_BIN_EXE_codex-memory");
+    let mut daemon = spawn_process(
+        cli_bin,
+        &["--config", config.to_str().expect("config"), "serve"],
+    );
+    wait_for_health(cli_bin, &config);
+
+    let session_file = temp.path().join("codex-session.jsonl");
+    std::fs::write(
+        &session_file,
+        r#"{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Please avoid unsafe Rust. I prefer concise answers."}]}}
+{"type":"response_item","payload":{"type":"message","role":"assistant","phase":"commentary","content":[{"type":"output_text","text":"I'm checking the build now."}]}}
+{"type":"response_item","payload":{"type":"message","role":"assistant","phase":"final_answer","content":[{"type":"output_text","text":"Decision: use sqlite for local memory."}]}}
+"#,
+    )
+    .expect("session file");
+
+    let ingest = run_json(
+        cli_bin,
+        &config,
+        &[
+            "ingest-codex-session",
+            "--file",
+            session_file.to_str().expect("session file"),
+            "--session",
+            "codex-session-1",
+            "--project-id",
+            "repo-a",
+            "--max-memories",
+            "8",
+        ],
+    );
+    assert_eq!(ingest["captured"].as_u64().expect("captured"), 3);
+
+    let list = run_json(
+        cli_bin,
+        &config,
+        &[
+            "list",
+            "--session",
+            "codex-session-1",
+            "--limit",
+            "8",
+        ],
+    );
+    assert_eq!(list["total"].as_u64().expect("total"), 3);
+
+    daemon.kill().expect("kill");
+    let _ = daemon.wait();
+}

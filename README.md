@@ -92,6 +92,23 @@ codex-memory health
 codex-memory stats
 ```
 
+Service management:
+
+```bash
+systemctl --user start codex-memory.service
+systemctl --user stop codex-memory.service
+systemctl --user restart codex-memory.service
+systemctl --user status codex-memory.service
+```
+
+macOS:
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.alphaone.codex-memory.plist
+launchctl unload ~/Library/LaunchAgents/com.alphaone.codex-memory.plist
+launchctl list | grep codex-memory
+```
+
 If you get stuck, use the troubleshooting steps in [`docs/quickstart.md`](./docs/quickstart.md).
 
 To remove it cleanly:
@@ -163,6 +180,15 @@ Coverage policy:
 ## GitHub Pages
 
 The repository ships docs from [`docs/`](./docs/). If you publish the repo on GitHub, enable Pages from the `docs/` directory on the default branch.
+
+## Public release hygiene
+
+Before pushing to a public repository:
+
+- scan the working tree and git history for credentials, keys, tokens, and private data
+- verify install, uninstall, and service-management commands still work on the supported platforms
+- run the automated test suite and localhost validation scripts
+- prefer a no-reply or role-based author email for public commits if personal email addresses should not appear in git history
 
 ## Attribution
 

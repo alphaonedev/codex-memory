@@ -3,8 +3,12 @@
 //
 // Heuristic transcript ingestion for extracting durable memories from Codex-style sessions.
 
+use anyhow::{Context, Result};
+use serde_json::Value;
+
 use crate::model::{
     CaptureMemory, CreateMemory, MemoryKind, ProjectScope, TranscriptIngestRequest,
+    TranscriptMessage,
 };
 
 pub fn extract_memories(request: &TranscriptIngestRequest) -> Vec<CaptureMemory> {
@@ -38,7 +42,13 @@ fn classify_sentence(
     sentence: &str,
     request: &TranscriptIngestRequest,
 ) -> Option<CaptureMemory> {
-    let lower = sentence.to_lowercase();
+    let trimmed = sentence.trim();
+    let normalized = normalize_sentence(trimmed);
+    if normalized.len() < 12 || is_low_signal_sentence(trimmed, &normalized, request) {
+        return None;
+    }
+
+    let lower = normalized.to_lowercase();
     let (kind, priority, confidence, tags) = if starts_with_any(
         &lower,
         &["must ", "do not ", "don't ", "avoid ", "never ", "constraint"],
@@ -84,7 +94,9 @@ fn classify_sentence(
         || lower.contains("configured")
     {
         (MemoryKind::Fact, 68, 0.7, vec!["fact".to_owned()])
-    } else if role == "assistant" && lower.contains("summary") {
+    } else if role == "assistant"
+        && starts_with_any(&lower, &["summary:", "summary ", "in summary", "to summarize"])
+    {
         (
             MemoryKind::Summary,
             72,
@@ -97,10 +109,10 @@ fn classify_sentence(
 
     let mut tags = tags;
     tags.extend(infer_tags(&lower));
-    let summary = Some(summarize(sentence));
+    let summary = Some(summarize(&normalized));
     Some(CaptureMemory {
         memory: CreateMemory {
-            content: sentence.trim().to_owned(),
+            content: normalized,
             summary,
             kind,
             scope: "session".to_owned(),
@@ -130,6 +142,66 @@ fn summarize(sentence: &str) -> String {
     } else {
         format!("{}...", &trimmed[..69])
     }
+}
+
+fn is_low_signal_sentence(
+    original: &str,
+    normalized: &str,
+    request: &TranscriptIngestRequest,
+) -> bool {
+    let lower = normalized.to_lowercase();
+    let original_lower = original.to_lowercase();
+
+    if looks_like_assignment(normalized) {
+        return true;
+    }
+
+    if request.source == "codex-session"
+        && starts_with_any(
+            &lower,
+            &[
+                "i'm checking",
+                "i am checking",
+                "i'm wiring",
+                "i am wiring",
+                "i'm updating",
+                "i am updating",
+                "i'm doing",
+                "i am doing",
+                "i'm switching",
+                "i am switching",
+                "i found",
+                "if you want",
+                "the build ",
+                "build is ",
+            ],
+        )
+    {
+        return true;
+    }
+
+    if request.source == "codex-session" && starts_with_any(&original_lower, &["- `", "* `"]) {
+        return true;
+    }
+
+    false
+}
+
+fn normalize_sentence(sentence: &str) -> String {
+    sentence
+        .trim()
+        .trim_start_matches(['-', '*', '#', ' '])
+        .replace('`', "")
+        .trim()
+        .to_owned()
+}
+
+fn looks_like_assignment(sentence: &str) -> bool {
+    let Some((left, right)) = sentence.split_once('=') else {
+        return false;
+    };
+
+    !left.trim().is_empty() && !right.trim().is_empty()
 }
 
 fn infer_tags(lower: &str) -> Vec<String> {
@@ -199,11 +271,208 @@ fn synonyms(token: &str) -> &'static [&'static str] {
     }
 }
 
+pub fn load_transcript_messages(path: &std::path::Path) -> Result<Vec<TranscriptMessage>> {
+    let raw = std::fs::read_to_string(path)
+        .with_context(|| format!("failed to read transcript at {}", path.display()))?;
+    parse_transcript_messages(&raw)
+}
+
+pub fn parse_transcript_messages(raw: &str) -> Result<Vec<TranscriptMessage>> {
+    if raw.trim_start().starts_with('[') {
+        let messages: Vec<TranscriptMessage> =
+            serde_json::from_str(raw).context("failed to parse transcript JSON")?;
+        return Ok(messages);
+    }
+
+    let mut messages = Vec::new();
+    for line in raw.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        if line.starts_with('{') {
+            if let Some(message) = parse_codex_session_line(line)? {
+                messages.push(message);
+            }
+            continue;
+        }
+
+        if let Some((role, content)) = line.split_once(':') {
+            messages.push(TranscriptMessage {
+                role: role.trim().to_owned(),
+                content: content.trim().to_owned(),
+            });
+        } else {
+            messages.push(TranscriptMessage {
+                role: "user".to_owned(),
+                content: line.to_owned(),
+            });
+        }
+    }
+    Ok(messages)
+}
+
+pub fn find_latest_codex_session_file(
+    sessions_root: &std::path::Path,
+    cwd_filter: Option<&str>,
+    after_epoch: Option<u64>,
+) -> Result<Option<std::path::PathBuf>> {
+    let mut candidates = Vec::new();
+    collect_jsonl_files(sessions_root, &mut candidates)?;
+    candidates.sort_by(|left, right| {
+        let left_mtime = left
+            .metadata()
+            .and_then(|meta| meta.modified())
+            .ok();
+        let right_mtime = right
+            .metadata()
+            .and_then(|meta| meta.modified())
+            .ok();
+        right_mtime.cmp(&left_mtime).then_with(|| right.cmp(left))
+    });
+
+    for path in candidates {
+        if let Some(after_epoch) = after_epoch {
+            let modified = path
+                .metadata()
+                .and_then(|meta| meta.modified())
+                .context("failed to read candidate session metadata")?;
+            let modified_epoch = modified
+                .duration_since(std::time::UNIX_EPOCH)
+                .context("candidate session mtime was before unix epoch")?
+                .as_secs();
+            if modified_epoch < after_epoch {
+                continue;
+            }
+        }
+
+        if let Some(expected_cwd) = cwd_filter {
+            let raw = std::fs::read_to_string(&path)
+                .with_context(|| format!("failed to read Codex session at {}", path.display()))?;
+            let Some(actual_cwd) = extract_session_meta_cwd(&raw)? else {
+                continue;
+            };
+            if actual_cwd != expected_cwd {
+                continue;
+            }
+        }
+
+        return Ok(Some(path));
+    }
+
+    Ok(None)
+}
+
+fn collect_jsonl_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) -> Result<()> {
+    if !dir.exists() {
+        return Ok(());
+    }
+
+    for entry in std::fs::read_dir(dir)
+        .with_context(|| format!("failed to read sessions directory {}", dir.display()))?
+    {
+        let entry = entry?;
+        let path = entry.path();
+        let file_type = entry.file_type()?;
+        if file_type.is_dir() {
+            collect_jsonl_files(&path, out)?;
+        } else if path.extension().and_then(|ext| ext.to_str()) == Some("jsonl") {
+            out.push(path);
+        }
+    }
+
+    Ok(())
+}
+
+fn parse_codex_session_line(line: &str) -> Result<Option<TranscriptMessage>> {
+    let value: Value = match serde_json::from_str(line) {
+        Ok(value) => value,
+        Err(_) => return Ok(None),
+    };
+
+    if value.get("type").and_then(Value::as_str) != Some("response_item") {
+        return Ok(None);
+    }
+
+    let payload = match value.get("payload") {
+        Some(payload) => payload,
+        None => return Ok(None),
+    };
+
+    if payload.get("type").and_then(Value::as_str) != Some("message") {
+        return Ok(None);
+    }
+
+    let role = match payload.get("role").and_then(Value::as_str) {
+        Some("user") => "user",
+        Some("assistant") => {
+            let phase = payload.get("phase").and_then(Value::as_str);
+            if phase != Some("final_answer") {
+                return Ok(None);
+            }
+            "assistant"
+        }
+        _ => return Ok(None),
+    };
+
+    let content = payload
+        .get("content")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| match item.get("type").and_then(Value::as_str) {
+                    Some("input_text") | Some("output_text") => {
+                        item.get("text").and_then(Value::as_str).map(str::to_owned)
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+        .unwrap_or_default();
+
+    if content.is_empty()
+        || content.starts_with("<environment_context>")
+        || content.starts_with("<permissions instructions>")
+        || content.starts_with("<collaboration_mode>")
+        || content.starts_with("<skills_instructions>")
+    {
+        return Ok(None);
+    }
+
+    Ok(Some(TranscriptMessage {
+        role: role.to_owned(),
+        content,
+    }))
+}
+
+fn extract_session_meta_cwd(raw: &str) -> Result<Option<String>> {
+    for line in raw.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        if !line.starts_with('{') {
+            continue;
+        }
+
+        let value: Value = match serde_json::from_str(line) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+
+        if value.get("type").and_then(Value::as_str) != Some("session_meta") {
+            continue;
+        }
+
+        return Ok(value
+            .get("payload")
+            .and_then(|payload| payload.get("cwd"))
+            .and_then(Value::as_str)
+            .map(str::to_owned));
+    }
+
+    Ok(None)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::model::{CaptureMode, ProjectScope, TranscriptIngestRequest, TranscriptMessage};
 
-    use super::{expand_query, extract_memories};
+    use super::{expand_query, extract_memories, find_latest_codex_session_file, parse_transcript_messages};
 
     #[test]
     fn extracts_constraints_preferences_and_todos() {
@@ -241,5 +510,79 @@ mod tests {
         assert!(expanded.contains(&"cargo".to_owned()));
         assert!(expanded.contains(&"coverage".to_owned()));
         assert!(expanded.contains(&"error".to_owned()));
+    }
+
+    #[test]
+    fn parses_codex_session_jsonl_messages() {
+        let raw = r#"{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"please avoid unsafe rust"}]}}
+{"type":"response_item","payload":{"type":"message","role":"assistant","phase":"commentary","content":[{"type":"output_text","text":"I'm checking the build now."}]}}
+{"type":"response_item","payload":{"type":"message","role":"assistant","phase":"final_answer","content":[{"type":"output_text","text":"Decision: use sqlite for local state."}]}}
+"#;
+
+        let messages = parse_transcript_messages(raw).expect("parse messages");
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].role, "user");
+        assert_eq!(messages[1].role, "assistant");
+        assert!(messages[1].content.contains("sqlite"));
+    }
+
+    #[test]
+    fn codex_session_ingest_filters_operational_chatter() {
+        let request = TranscriptIngestRequest {
+            messages: vec![
+                TranscriptMessage {
+                    role: "assistant".into(),
+                    content: "I'm checking the build now. Summary: use sqlite for local memory. - `CODEX_MEMORY_START_KIND=summary`".into(),
+                },
+                TranscriptMessage {
+                    role: "user".into(),
+                    content: "Please avoid unsafe Rust. I prefer concise answers.".into(),
+                },
+            ],
+            source: "codex-session".into(),
+            session: Some("s1".into()),
+            project: ProjectScope::default(),
+            mode: CaptureMode::Upsert,
+            max_memories: 10,
+        };
+
+        let memories = extract_memories(&request);
+        assert!(memories.iter().any(|memory| memory.memory.content == "Summary: use sqlite for local memory"));
+        assert!(memories.iter().any(|memory| memory.memory.kind == crate::model::MemoryKind::Constraint));
+        assert!(memories.iter().all(|memory| !memory.memory.content.contains("checking the build")));
+        assert!(memories.iter().all(|memory| !memory.memory.content.contains("CODEX_MEMORY_START_KIND")));
+    }
+
+    #[test]
+    fn finds_latest_matching_codex_session_file() {
+        let root = std::env::temp_dir().join(format!(
+            "codex-memory-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("epoch")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(root.join("2026/03/25")).expect("mkdir");
+        let first = root.join("2026/03/25/first.jsonl");
+        let second = root.join("2026/03/25/second.jsonl");
+        std::fs::write(
+            &first,
+            r#"{"type":"session_meta","payload":{"cwd":"/repo/one"}}"#,
+        )
+        .expect("write first");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(
+            &second,
+            r#"{"type":"session_meta","payload":{"cwd":"/repo/two"}}"#,
+        )
+        .expect("write second");
+
+        let found = find_latest_codex_session_file(&root, Some("/repo/two"), None)
+            .expect("find")
+            .expect("path");
+        assert_eq!(found, second);
+
+        std::fs::remove_dir_all(root).expect("cleanup");
     }
 }

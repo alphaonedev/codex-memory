@@ -23,6 +23,8 @@ The install script uses `launchctl` and a user LaunchAgent. No root access is re
 Useful commands:
 
 ```bash
+launchctl load ~/Library/LaunchAgents/com.alphaone.codex-memory.plist
+launchctl unload ~/Library/LaunchAgents/com.alphaone.codex-memory.plist
 launchctl list | grep codex-memory
 tail -f ~/Library/Logs/codex-memory/codex-memory.stderr.log
 ```
@@ -34,6 +36,9 @@ The install script uses `systemctl --user`. If `systemctl --user` is unavailable
 Useful commands:
 
 ```bash
+systemctl --user start codex-memory.service
+systemctl --user stop codex-memory.service
+systemctl --user restart codex-memory.service
 systemctl --user status codex-memory.service
 journalctl --user -u codex-memory.service -n 50
 ```
@@ -45,6 +50,9 @@ Fedora uses the same user-level systemd flow as Ubuntu.
 Useful commands:
 
 ```bash
+systemctl --user start codex-memory.service
+systemctl --user stop codex-memory.service
+systemctl --user restart codex-memory.service
 systemctl --user status codex-memory.service
 journalctl --user -u codex-memory.service -n 50
 ```

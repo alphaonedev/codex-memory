@@ -50,6 +50,7 @@ impl MemoryStore {
     }
 
     pub fn insert(&self, input: CreateMemory) -> Result<MemoryRecord> {
+        input.validate()?;
         let record = self.build_record(input);
         self.insert_record(&record)?;
         self.get(record.id)?
@@ -57,6 +58,7 @@ impl MemoryStore {
     }
 
     pub fn capture(&self, capture: CaptureMemory) -> Result<MemoryRecord> {
+        capture.memory.validate()?;
         match capture.mode {
             CaptureMode::Insert => self.insert(capture.memory),
             CaptureMode::Reinforce => {
@@ -110,6 +112,7 @@ impl MemoryStore {
     }
 
     pub fn update(&self, id: Uuid, changes: UpdateMemory) -> Result<Option<MemoryRecord>> {
+        changes.validate()?;
         let Some(current) = self.get(id)? else {
             return Ok(None);
         };

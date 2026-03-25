@@ -8,10 +8,10 @@ use std::path::PathBuf;
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use codex_memory::config::AppConfig;
+use codex_memory::ingest::{find_latest_codex_session_file, load_transcript_messages};
 use codex_memory::model::{
     CaptureMemory, CaptureMode, CreateMemory, MemoryKind, ProjectScope, PromptFormat,
-    PromptRequest, ReinforceMemory, SearchRequest, TranscriptIngestRequest, TranscriptMessage,
-    UpdateMemory,
+    PromptRequest, ReinforceMemory, SearchRequest, TranscriptIngestRequest, UpdateMemory,
 };
 use codex_memory::service::healthcheck;
 use serde::Serialize;
@@ -34,6 +34,7 @@ enum Command {
     Add(AddArgs),
     Capture(CaptureArgs),
     IngestTranscript(IngestTranscriptArgs),
+    IngestCodexSession(IngestCodexSessionArgs),
     Get { id: String },
     Update(UpdateArgs),
     Reinforce(ReinforceArgs),
@@ -111,6 +112,28 @@ struct IngestTranscriptArgs {
     #[arg(long)]
     file: PathBuf,
     #[arg(long, default_value = "transcript")]
+    source: String,
+    #[arg(long)]
+    session: Option<String>,
+    #[arg(long, value_enum, default_value_t = CaptureModeArg::Upsert)]
+    mode: CaptureModeArg,
+    #[arg(long, default_value_t = 12)]
+    max_memories: usize,
+    #[command(flatten)]
+    project: ProjectArgs,
+}
+
+#[derive(Debug, Args)]
+struct IngestCodexSessionArgs {
+    #[arg(long)]
+    file: Option<PathBuf>,
+    #[arg(long)]
+    sessions_root: Option<PathBuf>,
+    #[arg(long)]
+    cwd: Option<PathBuf>,
+    #[arg(long)]
+    after_epoch: Option<u64>,
+    #[arg(long, default_value = "codex-session")]
     source: String,
     #[arg(long)]
     session: Option<String>,
@@ -281,6 +304,46 @@ async fn main() -> Result<()> {
                             "/v1/ingest/transcript",
                             &TranscriptIngestRequest {
                                 messages: load_transcript_messages(&args.file)?,
+                                source: args.source,
+                                session: args.session,
+                                project: args.project.into(),
+                                mode: args.mode.into(),
+                                max_memories: args.max_memories,
+                            },
+                        )
+                        .await?;
+                    print_json(&response)?;
+                }
+                Command::IngestCodexSession(args) => {
+                    let session_file = match args.file {
+                        Some(path) => path,
+                        None => {
+                            let sessions_root = args
+                                .sessions_root
+                                .unwrap_or_else(default_codex_sessions_root);
+                            let cwd = args
+                                .cwd
+                                .as_ref()
+                                .map(|path| path.to_string_lossy().into_owned());
+                            find_latest_codex_session_file(
+                                &sessions_root,
+                                cwd.as_deref(),
+                                args.after_epoch,
+                            )?
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "no matching Codex session file found under {}",
+                                    sessions_root.display()
+                                )
+                            })?
+                        }
+                    };
+
+                    let response: serde_json::Value = client
+                        .post(
+                            "/v1/ingest/transcript",
+                            &TranscriptIngestRequest {
+                                messages: load_transcript_messages(&session_file)?,
                                 source: args.source,
                                 session: args.session,
                                 project: args.project.into(),
@@ -505,30 +568,11 @@ fn build_list_path(args: ListArgs) -> String {
     format!("/v1/memories?{}", serializer.finish())
 }
 
-fn load_transcript_messages(path: &PathBuf) -> Result<Vec<TranscriptMessage>> {
-    let raw = std::fs::read_to_string(path)
-        .with_context(|| format!("failed to read transcript at {}", path.display()))?;
-    if raw.trim_start().starts_with('[') {
-        let messages: Vec<TranscriptMessage> =
-            serde_json::from_str(&raw).context("failed to parse transcript JSON")?;
-        return Ok(messages);
-    }
-
-    let mut messages = Vec::new();
-    for line in raw.lines().map(str::trim).filter(|line| !line.is_empty()) {
-        if let Some((role, content)) = line.split_once(':') {
-            messages.push(TranscriptMessage {
-                role: role.trim().to_owned(),
-                content: content.trim().to_owned(),
-            });
-        } else {
-            messages.push(TranscriptMessage {
-                role: "user".to_owned(),
-                content: line.to_owned(),
-            });
-        }
-    }
-    Ok(messages)
+fn default_codex_sessions_root() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".codex")
+        .join("sessions")
 }
 
 fn append_project_pairs(

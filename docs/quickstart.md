@@ -55,6 +55,23 @@ systemctl --user status codex-memory.service
 journalctl --user -u codex-memory.service -n 50
 ```
 
+## Service control
+
+Linux:
+
+```bash
+systemctl --user start codex-memory.service
+systemctl --user stop codex-memory.service
+systemctl --user restart codex-memory.service
+```
+
+macOS:
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.alphaone.codex-memory.plist
+launchctl unload ~/Library/LaunchAgents/com.alphaone.codex-memory.plist
+```
+
 ## Remove it
 
 ```bash

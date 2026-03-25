@@ -7,6 +7,7 @@ MIT licensed open source project by AlphaOne LLC.
 Linux:
 
 ```bash
+systemctl --user start codex-memory.service
 systemctl --user restart codex-memory.service
 systemctl --user stop codex-memory.service
 systemctl --user status codex-memory.service
@@ -19,8 +20,31 @@ macOS:
 launchctl list | grep codex-memory
 launchctl unload ~/Library/LaunchAgents/com.alphaone.codex-memory.plist
 launchctl load ~/Library/LaunchAgents/com.alphaone.codex-memory.plist
+```
+
+Restart cleanly:
+
+```bash
+launchctl unload ~/Library/LaunchAgents/com.alphaone.codex-memory.plist
+launchctl load ~/Library/LaunchAgents/com.alphaone.codex-memory.plist
 tail -f ~/Library/Logs/codex-memory/codex-memory.stderr.log
 ```
+
+## Install and remove
+
+Install or redeploy:
+
+```bash
+./scripts/install.sh
+```
+
+Remove the user service and installed binaries:
+
+```bash
+./scripts/uninstall.sh
+```
+
+The uninstall script leaves your config and SQLite database in place.
 
 ## Backup
 
@@ -46,3 +70,18 @@ For a disposable end-to-end validation:
 ```bash
 ./scripts/smoke.sh
 ```
+
+## Public repo security check
+
+Before a public push or release:
+
+```bash
+rg -n --hidden --glob '!target/**' --glob '!.git/**' '(AKIA|ASIA|BEGIN PRIVATE KEY|ghp_|github_pat_|sk-|api[_-]?key|secret|password)'
+git rev-list --all | xargs -r git grep -n -I -E '(AKIA|ASIA|BEGIN PRIVATE KEY|ghp_|github_pat_|sk-|api[_-]?key|secret|password)'
+```
+
+Review:
+
+- commit author names and emails
+- docs and examples for copied secrets or local home paths
+- shell history snippets before copying them into docs

@@ -57,6 +57,9 @@ async fn create_memory(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<CreateMemory>,
 ) -> Result<Json<crate::model::MemoryRecord>, ApiError> {
+    payload
+        .validate()
+        .map_err(|error| ApiError::bad_request(error.to_string()))?;
     Ok(Json(
         blocking(move || state.store.insert(payload))
             .await?
@@ -68,6 +71,10 @@ async fn capture_memory(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<CaptureMemory>,
 ) -> Result<Json<crate::model::MemoryRecord>, ApiError> {
+    payload
+        .memory
+        .validate()
+        .map_err(|error| ApiError::bad_request(error.to_string()))?;
     Ok(Json(
         blocking(move || state.store.capture(payload))
             .await?
@@ -79,6 +86,9 @@ async fn ingest_transcript(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<TranscriptIngestRequest>,
 ) -> Result<Json<TranscriptIngestResponse>, ApiError> {
+    payload
+        .validate()
+        .map_err(|error| ApiError::bad_request(error.to_string()))?;
     let extracted = extract_memories(&payload);
     let total = extracted.len();
     let store = state.store.clone();
@@ -204,6 +214,9 @@ async fn update_memory(
     Path(id): Path<Uuid>,
     Json(payload): Json<UpdateMemory>,
 ) -> Result<Json<crate::model::MemoryRecord>, ApiError> {
+    payload
+        .validate()
+        .map_err(|error| ApiError::bad_request(error.to_string()))?;
     blocking(move || state.store.update(id, payload))
         .await?
         .map_err(ApiError::from)?
@@ -599,6 +612,56 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let body: Value = read_json(response.into_body()).await;
         assert!(body["captured"].as_u64().expect("captured") >= 2);
+    }
+
+    #[tokio::test]
+    async fn transcript_ingest_rejects_empty_message_content() {
+        let app = app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/v1/ingest/transcript")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        json!({
+                            "source": "session-log",
+                            "messages": [
+                                {"role": "user", "content": "   "}
+                            ]
+                        })
+                        .to_string(),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn create_memory_rejects_empty_content() {
+        let app = app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/v1/memories")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        json!({
+                            "content": "  ",
+                            "kind": "fact"
+                        })
+                        .to_string(),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 
     async fn read_json<T: serde::de::DeserializeOwned>(body: Body) -> T {
