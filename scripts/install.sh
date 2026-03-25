@@ -57,7 +57,16 @@ case "${os_name}" in
       -e "s|@CODEX_MEMORYD@|${bin_dir}/codex-memoryd|g" \
       -e "s|@CONFIG_PATH@|${config_path}|g" \
       "${repo_root}/systemd/codex-memory.service.in" > "${service_path}"
-    systemctl --user daemon-reload
+    if ! systemctl --user daemon-reload >/dev/null 2>&1; then
+      echo >&2
+      echo "install completed, but the user systemd bus is not available in this environment." >&2
+      echo "binaries installed to ${bin_dir}" >&2
+      echo "config written to ${config_path}" >&2
+      echo "on a normal desktop login session, rerun ./scripts/install.sh or run:" >&2
+      echo "  systemctl --user daemon-reload" >&2
+      echo "  systemctl --user enable --now ${service_name}" >&2
+      exit 0
+    fi
     systemctl --user enable --now "${service_name}"
     echo
     echo "installed ${service_name}"

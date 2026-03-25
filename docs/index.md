@@ -9,6 +9,28 @@ Local-first persistent memory for Codex, implemented as a lightweight Rust daemo
 - [Testing](./testing)
 - [License](../LICENSE)
 
+## For Non-Technical Users
+
+Copy and paste these commands one at a time:
+
+```bash
+git clone https://github.com/alphaonedev/codex-memory.git
+cd codex-memory
+./scripts/install.sh
+codex-memory health
+```
+
+If the last command prints `ok`, the local memory daemon is running.
+
+Store your first memory:
+
+```bash
+codex-memory add --content "I prefer concise technical answers" --kind preference --project-id my-project --tag user
+codex-memory search concise --project-id my-project
+```
+
+If you want the easiest full walkthrough, use the [Quickstart](./quickstart) page.
+
 ## Goals
 
 - Keep durable memory outside the model session
