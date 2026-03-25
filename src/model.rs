@@ -440,7 +440,8 @@ mod tests {
 
     #[test]
     fn search_request_defaults_missing_fields() {
-        let request: SearchRequest = serde_json::from_value(json!({ "query": "rust" })).expect("request");
+        let request: SearchRequest =
+            serde_json::from_value(json!({ "query": "rust" })).expect("request");
         assert_eq!(request.query.as_deref(), Some("rust"));
         assert!(request.tags.is_empty());
         assert!(!request.include_expired);

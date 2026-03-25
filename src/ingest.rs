@@ -51,7 +51,14 @@ fn classify_sentence(
     let lower = normalized.to_lowercase();
     let (kind, priority, confidence, tags) = if starts_with_any(
         &lower,
-        &["must ", "do not ", "don't ", "avoid ", "never ", "constraint"],
+        &[
+            "must ",
+            "do not ",
+            "don't ",
+            "avoid ",
+            "never ",
+            "constraint",
+        ],
     ) || lower.contains("must not")
         || lower.contains("avoid ")
     {
@@ -63,7 +70,13 @@ fn classify_sentence(
         )
     } else if starts_with_any(
         &lower,
-        &["prefer ", "preference", "i prefer", "user prefers", "please "],
+        &[
+            "prefer ",
+            "preference",
+            "i prefer",
+            "user prefers",
+            "please ",
+        ],
     ) || (role == "user" && lower.contains("prefer"))
     {
         (
@@ -81,28 +94,27 @@ fn classify_sentence(
         &lower,
         &["decision", "we decided", "decided to", "the plan is"],
     ) {
-        (
-            MemoryKind::Decision,
-            84,
-            0.8,
-            vec!["decision".to_owned()],
-        )
+        (MemoryKind::Decision, 84, 0.8, vec!["decision".to_owned()])
     } else if starts_with_any(
         &lower,
-        &["remember ", "important ", "note that", "uses ", "repository uses"],
+        &[
+            "remember ",
+            "important ",
+            "note that",
+            "uses ",
+            "repository uses",
+        ],
     ) || lower.contains("uses ")
         || lower.contains("configured")
     {
         (MemoryKind::Fact, 68, 0.7, vec!["fact".to_owned()])
     } else if role == "assistant"
-        && starts_with_any(&lower, &["summary:", "summary ", "in summary", "to summarize"])
-    {
-        (
-            MemoryKind::Summary,
-            72,
-            0.72,
-            vec!["summary".to_owned()],
+        && starts_with_any(
+            &lower,
+            &["summary:", "summary ", "in summary", "to summarize"],
         )
+    {
+        (MemoryKind::Summary, 72, 0.72, vec!["summary".to_owned()])
     } else {
         return None;
     };
@@ -316,14 +328,8 @@ pub fn find_latest_codex_session_file(
     let mut candidates = Vec::new();
     collect_jsonl_files(sessions_root, &mut candidates)?;
     candidates.sort_by(|left, right| {
-        let left_mtime = left
-            .metadata()
-            .and_then(|meta| meta.modified())
-            .ok();
-        let right_mtime = right
-            .metadata()
-            .and_then(|meta| meta.modified())
-            .ok();
+        let left_mtime = left.metadata().and_then(|meta| meta.modified()).ok();
+        let right_mtime = right.metadata().and_then(|meta| meta.modified()).ok();
         right_mtime.cmp(&left_mtime).then_with(|| right.cmp(left))
     });
 
@@ -472,7 +478,9 @@ fn extract_session_meta_cwd(raw: &str) -> Result<Option<String>> {
 mod tests {
     use crate::model::{CaptureMode, ProjectScope, TranscriptIngestRequest, TranscriptMessage};
 
-    use super::{expand_query, extract_memories, find_latest_codex_session_file, parse_transcript_messages};
+    use super::{
+        expand_query, extract_memories, find_latest_codex_session_file, parse_transcript_messages,
+    };
 
     #[test]
     fn extracts_constraints_preferences_and_todos() {
@@ -498,10 +506,26 @@ mod tests {
         };
 
         let memories = extract_memories(&request);
-        assert!(memories.iter().any(|memory| memory.memory.kind == crate::model::MemoryKind::Constraint));
-        assert!(memories.iter().any(|memory| memory.memory.kind == crate::model::MemoryKind::Preference));
-        assert!(memories.iter().any(|memory| memory.memory.kind == crate::model::MemoryKind::Todo));
-        assert!(memories.iter().any(|memory| memory.memory.kind == crate::model::MemoryKind::Decision));
+        assert!(
+            memories
+                .iter()
+                .any(|memory| memory.memory.kind == crate::model::MemoryKind::Constraint)
+        );
+        assert!(
+            memories
+                .iter()
+                .any(|memory| memory.memory.kind == crate::model::MemoryKind::Preference)
+        );
+        assert!(
+            memories
+                .iter()
+                .any(|memory| memory.memory.kind == crate::model::MemoryKind::Todo)
+        );
+        assert!(
+            memories
+                .iter()
+                .any(|memory| memory.memory.kind == crate::model::MemoryKind::Decision)
+        );
     }
 
     #[test]
@@ -547,10 +571,26 @@ mod tests {
         };
 
         let memories = extract_memories(&request);
-        assert!(memories.iter().any(|memory| memory.memory.content == "Summary: use sqlite for local memory"));
-        assert!(memories.iter().any(|memory| memory.memory.kind == crate::model::MemoryKind::Constraint));
-        assert!(memories.iter().all(|memory| !memory.memory.content.contains("checking the build")));
-        assert!(memories.iter().all(|memory| !memory.memory.content.contains("CODEX_MEMORY_START_KIND")));
+        assert!(
+            memories
+                .iter()
+                .any(|memory| memory.memory.content == "Summary: use sqlite for local memory")
+        );
+        assert!(
+            memories
+                .iter()
+                .any(|memory| memory.memory.kind == crate::model::MemoryKind::Constraint)
+        );
+        assert!(
+            memories
+                .iter()
+                .all(|memory| !memory.memory.content.contains("checking the build"))
+        );
+        assert!(
+            memories
+                .iter()
+                .all(|memory| !memory.memory.content.contains("CODEX_MEMORY_START_KIND"))
+        );
     }
 
     #[test]

@@ -23,7 +23,11 @@ pub struct AppState {
 
 pub async fn serve(config: AppConfig) -> Result<()> {
     config.ensure_parent_dirs()?;
-    let store = MemoryStore::open(&config.database_path, config.default_limit, config.max_limit)?;
+    let store = MemoryStore::open(
+        &config.database_path,
+        config.default_limit,
+        config.max_limit,
+    )?;
     let state = Arc::new(AppState {
         store,
         config: config.clone(),

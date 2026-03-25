@@ -26,7 +26,12 @@ pub fn encode_memories(memories: &[MemoryRecord]) -> String {
             escape(memory.role.clone().unwrap_or_default()),
             escape(memory.tags.join("|")),
             escape(memory.created_at.to_rfc3339()),
-            escape(memory.expires_at.map(|value| value.to_rfc3339()).unwrap_or_default()),
+            escape(
+                memory
+                    .expires_at
+                    .map(|value| value.to_rfc3339())
+                    .unwrap_or_default(),
+            ),
             escape(memory.summary.clone().unwrap_or_default()),
             escape(memory.content.clone()),
         ]

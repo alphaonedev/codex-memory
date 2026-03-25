@@ -18,12 +18,12 @@ use tokio::task;
 use tower_http::trace::TraceLayer;
 use uuid::Uuid;
 
+use crate::ingest::extract_memories;
 use crate::model::{
     CaptureMemory, CreateMemory, MemoryKind, ProjectScope, PromptRequest, ReinforceMemory,
     SearchRequest, TranscriptIngestRequest, TranscriptIngestResponse, UpdateMemory,
 };
 use crate::service::AppState;
-use crate::ingest::extract_memories;
 
 pub fn router(state: Arc<AppState>) -> Router {
     Router::new()
@@ -164,26 +164,22 @@ impl ListQuery {
         for (key, value) in url::form_urlencoded::parse(raw_query.as_bytes()) {
             match key.as_ref() {
                 "limit" => {
-                    query.limit = Some(
-                        value
-                            .parse::<usize>()
-                            .map_err(|_| ApiError::bad_request(format!("invalid limit value: {value}")))?,
-                    );
+                    query.limit = Some(value.parse::<usize>().map_err(|_| {
+                        ApiError::bad_request(format!("invalid limit value: {value}"))
+                    })?);
                 }
                 "session" => query.session = Some(value.into_owned()),
                 "kind" => query.kind = Some(value.parse().map_err(ApiError::bad_request)?),
                 "tag" => query.tag.push(value.into_owned()),
                 "include_expired" => {
-                    query.include_expired =
-                        Some(value.parse::<bool>().map_err(|_| {
-                            ApiError::bad_request(format!("invalid include_expired value: {value}"))
-                        })?);
+                    query.include_expired = Some(value.parse::<bool>().map_err(|_| {
+                        ApiError::bad_request(format!("invalid include_expired value: {value}"))
+                    })?);
                 }
                 "include_archived" => {
-                    query.include_archived =
-                        Some(value.parse::<bool>().map_err(|_| {
-                            ApiError::bad_request(format!("invalid include_archived value: {value}"))
-                        })?);
+                    query.include_archived = Some(value.parse::<bool>().map_err(|_| {
+                        ApiError::bad_request(format!("invalid include_archived value: {value}"))
+                    })?);
                 }
                 "project_id" => query.project_id = Some(value.into_owned()),
                 "repo_root" => query.repo_root = Some(value.into_owned()),
@@ -297,7 +293,9 @@ async fn delete_memory(
     }
 }
 
-async fn prune_expired(State(state): State<Arc<AppState>>) -> Result<Json<serde_json::Value>, ApiError> {
+async fn prune_expired(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, ApiError> {
     let removed = blocking(move || state.store.prune_expired())
         .await?
         .map_err(ApiError::from)?;
@@ -382,9 +380,12 @@ mod tests {
             max_limit: 64,
         };
         config.ensure_parent_dirs().expect("dirs");
-        let store =
-            MemoryStore::open(&config.database_path, config.default_limit, config.max_limit)
-                .expect("store");
+        let store = MemoryStore::open(
+            &config.database_path,
+            config.default_limit,
+            config.max_limit,
+        )
+        .expect("store");
         let state = Arc::new(AppState { store, config });
         router(state)
     }
@@ -472,7 +473,9 @@ mod tests {
                     .method(Method::POST)
                     .uri(format!("/v1/memories/{id}/reinforce"))
                     .header("content-type", "application/json")
-                    .body(Body::from(json!({ "delta": 2, "confidence_boost": 0.1 }).to_string()))
+                    .body(Body::from(
+                        json!({ "delta": 2, "confidence_boost": 0.1 }).to_string(),
+                    ))
                     .expect("request"),
             )
             .await
@@ -486,7 +489,9 @@ mod tests {
                     .method(Method::PATCH)
                     .uri(format!("/v1/memories/{id}"))
                     .header("content-type", "application/json")
-                    .body(Body::from(json!({ "summary": "updated summary" }).to_string()))
+                    .body(Body::from(
+                        json!({ "summary": "updated summary" }).to_string(),
+                    ))
                     .expect("request"),
             )
             .await
@@ -527,7 +532,12 @@ mod tests {
             .expect("response");
         assert_eq!(prompt.status(), StatusCode::OK);
         let prompt_body: Value = read_json(prompt.into_body()).await;
-        assert!(prompt_body["payload"].as_str().expect("payload").starts_with("sections["));
+        assert!(
+            prompt_body["payload"]
+                .as_str()
+                .expect("payload")
+                .starts_with("sections[")
+        );
 
         let archive = app
             .clone()

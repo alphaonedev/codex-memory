@@ -12,7 +12,10 @@ use codex_memory::service::serve;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Debug, Parser)]
-#[command(name = "codex-memoryd", about = "Lightweight localhost memory daemon for Codex")]
+#[command(
+    name = "codex-memoryd",
+    about = "Lightweight localhost memory daemon for Codex"
+)]
 struct Args {
     #[arg(long)]
     config: Option<PathBuf>,
@@ -48,9 +51,12 @@ mod tests {
 
     #[test]
     fn parses_config_argument() {
-        let args = Args::try_parse_from(["codex-memoryd", "--config", "/tmp/config.toml"])
-            .expect("args");
-        assert_eq!(args.config.as_deref(), Some(std::path::Path::new("/tmp/config.toml")));
+        let args =
+            Args::try_parse_from(["codex-memoryd", "--config", "/tmp/config.toml"]).expect("args");
+        assert_eq!(
+            args.config.as_deref(),
+            Some(std::path::Path::new("/tmp/config.toml"))
+        );
     }
 
     #[test]

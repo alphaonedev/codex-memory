@@ -501,7 +501,11 @@ impl Client {
     }
 
     async fn get<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T> {
-        let response = self.http.get(format!("{}{}", self.base, path)).send().await?;
+        let response = self
+            .http
+            .get(format!("{}{}", self.base, path))
+            .send()
+            .await?;
         parse_response(response).await
     }
 
@@ -534,14 +538,22 @@ impl Client {
     }
 
     async fn delete(&self, path: &str) -> Result<()> {
-        let response = self.http.delete(format!("{}{}", self.base, path)).send().await?;
-        response.error_for_status().context("delete request failed")?;
+        let response = self
+            .http
+            .delete(format!("{}{}", self.base, path))
+            .send()
+            .await?;
+        response
+            .error_for_status()
+            .context("delete request failed")?;
         Ok(())
     }
 }
 
 async fn parse_response<T: serde::de::DeserializeOwned>(response: reqwest::Response) -> Result<T> {
-    let response = response.error_for_status().context("daemon request failed")?;
+    let response = response
+        .error_for_status()
+        .context("daemon request failed")?;
     Ok(response.json::<T>().await?)
 }
 

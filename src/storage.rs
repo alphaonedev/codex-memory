@@ -15,9 +15,9 @@ use uuid::Uuid;
 
 use crate::ingest::expand_query;
 use crate::model::{
-    CaptureMemory, CaptureMode, CreateMemory, MemoryKind, MemoryRecord, PromptBundle,
-    PromptFormat, PromptRequest, PromptSection, ReinforceMemory, SearchRequest, SearchResponse,
-    Stats, UpdateMemory,
+    CaptureMemory, CaptureMode, CreateMemory, MemoryKind, MemoryRecord, PromptBundle, PromptFormat,
+    PromptRequest, PromptSection, ReinforceMemory, SearchRequest, SearchResponse, Stats,
+    UpdateMemory,
 };
 use crate::toon;
 
@@ -90,7 +90,10 @@ impl MemoryStore {
                             confidence: Some(
                                 (existing.confidence + capture.memory.confidence).clamp(0.0, 1.0),
                             ),
-                            content: Some(prefer_longer(existing.content.clone(), capture.memory.content)),
+                            content: Some(prefer_longer(
+                                existing.content.clone(),
+                                capture.memory.content,
+                            )),
                             source: Some(capture.memory.source),
                             expires_at: Some(capture.memory.expires_at.or(existing.expires_at)),
                             ..UpdateMemory::default()
@@ -160,7 +163,11 @@ impl MemoryStore {
         )
     }
 
-    pub fn reinforce(&self, id: Uuid, reinforcement: ReinforceMemory) -> Result<Option<MemoryRecord>> {
+    pub fn reinforce(
+        &self,
+        id: Uuid,
+        reinforcement: ReinforceMemory,
+    ) -> Result<Option<MemoryRecord>> {
         let Some(current) = self.get(id)? else {
             return Ok(None);
         };
@@ -183,7 +190,11 @@ impl MemoryStore {
         let limit = self.resolve_limit(request.limit);
         let mut memories = self.fetch_candidates(request, None)?;
         memories.sort_by(compare_ranked);
-        let memories = memories.into_iter().take(limit).map(|entry| entry.memory).collect::<Vec<_>>();
+        let memories = memories
+            .into_iter()
+            .take(limit)
+            .map(|entry| entry.memory)
+            .collect::<Vec<_>>();
         self.mark_accessed(&memories)?;
         Ok(SearchResponse {
             total: memories.len(),
@@ -200,7 +211,11 @@ impl MemoryStore {
 
         let mut memories = self.fetch_candidates(request, Some(query))?;
         memories.sort_by(compare_ranked);
-        let memories = memories.into_iter().take(limit).map(|entry| entry.memory).collect::<Vec<_>>();
+        let memories = memories
+            .into_iter()
+            .take(limit)
+            .map(|entry| entry.memory)
+            .collect::<Vec<_>>();
         self.mark_accessed(&memories)?;
         Ok(SearchResponse {
             total: memories.len(),
@@ -277,7 +292,10 @@ impl MemoryStore {
             .iter()
             .flat_map(|section| section.memories.clone())
             .collect::<Vec<_>>();
-        let estimated_tokens = sections.iter().map(|section| section.estimated_tokens).sum();
+        let estimated_tokens = sections
+            .iter()
+            .map(|section| section.estimated_tokens)
+            .sum();
         let payload = match request.format {
             PromptFormat::Json => serde_json::to_string_pretty(&sections)?,
             PromptFormat::Toon => toon::encode(&sections, "sections")?,
@@ -473,14 +491,15 @@ impl MemoryStore {
     }
 
     fn fts_candidates(&self, request: &SearchRequest, query: &str) -> Result<Vec<RankedMemory>> {
-        let mut sql = "SELECT m.id, m.content, m.summary, m.kind, m.scope, m.source, m.tags, m.priority,
+        let mut sql =
+            "SELECT m.id, m.content, m.summary, m.kind, m.scope, m.source, m.tags, m.priority,
                     m.confidence, m.session, m.role, m.project_id, m.repo_root, m.git_branch,
                     m.worktree, m.task_id, m.archived, m.access_count, m.reinforcement_count,
                     m.created_at, m.updated_at, m.last_accessed_at, m.expires_at
              FROM memories_fts f
              JOIN memories m ON m.id = f.id
              WHERE memories_fts MATCH ?"
-            .to_string();
+                .to_string();
         let mut params = vec![sanitize_fts_query(query)];
         params.extend(self.apply_filters(&mut sql, request));
         sql.push_str(" ORDER BY bm25(memories_fts), m.priority DESC, m.updated_at DESC");
@@ -500,9 +519,12 @@ impl MemoryStore {
             .collect())
     }
 
-    fn fallback_candidates(&self, request: &SearchRequest, expanded_terms: &[String]) -> Result<Vec<RankedMemory>> {
-        let mut sql =
-            format!("{} WHERE 1=1", select_sql());
+    fn fallback_candidates(
+        &self,
+        request: &SearchRequest,
+        expanded_terms: &[String],
+    ) -> Result<Vec<RankedMemory>> {
+        let mut sql = format!("{} WHERE 1=1", select_sql());
         let mut params = Vec::new();
         for term in expanded_terms {
             sql.push_str(" AND (lower(content) LIKE ? OR lower(coalesce(summary, '')) LIKE ? OR lower(tags) LIKE ?)");
@@ -611,7 +633,11 @@ impl MemoryStore {
         ))?;
         Ok(stmt
             .query_row(
-                params![normalized_summary, input.kind.to_string(), project.project_id],
+                params![
+                    normalized_summary,
+                    input.kind.to_string(),
+                    project.project_id
+                ],
                 map_memory,
             )
             .optional()?)
@@ -629,7 +655,10 @@ impl MemoryStore {
         ]
         .join(" ");
 
-        conn.execute("DELETE FROM memories_fts WHERE id = ?1", [record.id.to_string()])?;
+        conn.execute(
+            "DELETE FROM memories_fts WHERE id = ?1",
+            [record.id.to_string()],
+        )?;
         conn.execute(
             "INSERT INTO memories_fts (id, content, summary, tags) VALUES (?1, ?2, ?3, ?4)",
             params![
@@ -693,8 +722,18 @@ impl MemoryStore {
         ensure_column(&conn, "memories", "worktree", "TEXT")?;
         ensure_column(&conn, "memories", "task_id", "TEXT")?;
         ensure_column(&conn, "memories", "archived", "INTEGER NOT NULL DEFAULT 0")?;
-        ensure_column(&conn, "memories", "access_count", "INTEGER NOT NULL DEFAULT 0")?;
-        ensure_column(&conn, "memories", "reinforcement_count", "INTEGER NOT NULL DEFAULT 0")?;
+        ensure_column(
+            &conn,
+            "memories",
+            "access_count",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
+        ensure_column(
+            &conn,
+            "memories",
+            "reinforcement_count",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
         ensure_column(&conn, "memories", "last_accessed_at", "TEXT")?;
         self.rebuild_fts_locked(&conn)?;
         Ok(())
@@ -759,7 +798,9 @@ fn ensure_column(conn: &Connection, table: &str, column: &str, definition: &str)
 }
 
 fn normalize_optional(value: Option<String>) -> Option<String> {
-    value.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    value
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
 }
 
 fn normalize_tags(tags: Vec<String>) -> Vec<String> {
@@ -900,7 +941,10 @@ fn text_score(memory: &MemoryRecord, query: &str, expanded_terms: &[String]) -> 
     if tokens.is_empty() {
         return 0.0;
     }
-    let overlap = tokens.iter().filter(|token| haystack.contains(token.as_str())).count() as f64;
+    let overlap = tokens
+        .iter()
+        .filter(|token| haystack.contains(token.as_str()))
+        .count() as f64;
     let exact_phrase = if haystack.contains(&normalized_query) {
         1.5
     } else {
@@ -940,14 +984,17 @@ fn pack_sections(memories: &[MemoryRecord], token_budget: usize) -> Vec<PromptSe
     let mut buckets: HashMap<&'static str, Vec<MemoryRecord>> = HashMap::new();
     for memory in memories {
         let cost = estimate_tokens(memory);
-        let must_include =
-            matches!(memory.kind, MemoryKind::Constraint | MemoryKind::Preference) || memory.priority >= 85;
+        let must_include = matches!(memory.kind, MemoryKind::Constraint | MemoryKind::Preference)
+            || memory.priority >= 85;
         if !must_include && cost > budget {
             continue;
         }
         if cost <= budget || must_include {
             budget = budget.saturating_sub(cost.min(budget));
-            buckets.entry(section_name(memory)).or_default().push(memory.clone());
+            buckets
+                .entry(section_name(memory))
+                .or_default()
+                .push(memory.clone());
         }
     }
     ["critical_context", "active_task", "supporting_context"]

@@ -236,13 +236,7 @@ fn ingest_codex_session_command_extracts_from_jsonl_file() {
     let list = run_json(
         cli_bin,
         &config,
-        &[
-            "list",
-            "--session",
-            "codex-session-1",
-            "--limit",
-            "8",
-        ],
+        &["list", "--session", "codex-session-1", "--limit", "8"],
     );
     assert_eq!(list["total"].as_u64().expect("total"), 3);
 
