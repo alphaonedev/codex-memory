@@ -148,7 +148,9 @@ Environment and service defaults are documented in [`docs/getting-started.md`](.
 ```bash
 cargo fmt --check
 cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-targets
+./scripts/test.sh
+./scripts/smoke.sh
+./scripts/localhost-check.sh
 ./scripts/coverage.sh
 ```
 
