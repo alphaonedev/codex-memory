@@ -1,3 +1,8 @@
+---
+layout: page
+title: Operations
+---
+
 # Operations
 
 MIT licensed open source project by AlphaOne LLC.

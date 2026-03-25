@@ -1,3 +1,8 @@
+---
+layout: page
+title: Quickstart
+---
+
 # Quickstart
 
 MIT licensed open source project by AlphaOne LLC.

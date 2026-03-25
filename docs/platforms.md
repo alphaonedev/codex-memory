@@ -1,3 +1,8 @@
+---
+layout: page
+title: Platforms
+---
+
 # Platforms
 
 `codex-memory` is intended to run on:

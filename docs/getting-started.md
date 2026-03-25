@@ -1,3 +1,8 @@
+---
+layout: page
+title: Getting Started
+---
+
 # Getting Started
 
 MIT licensed open source project by AlphaOne LLC.

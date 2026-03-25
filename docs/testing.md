@@ -1,3 +1,8 @@
+---
+layout: page
+title: Testing
+---
+
 # Testing
 
 MIT licensed open source project by AlphaOne LLC.

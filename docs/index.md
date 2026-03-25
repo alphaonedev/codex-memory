@@ -1,3 +1,8 @@
+---
+layout: home
+title: Home
+---
+
 # codex-memory
 
 Local-first persistent memory for Codex, implemented as a lightweight Rust daemon and CLI.

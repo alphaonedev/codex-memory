@@ -1,5 +1,7 @@
 title: codex-memory
 description: Lightweight Rust daemon and CLI for Codex local memory
+baseurl: /codex-memory
+url: https://alphaonedev.github.io
 theme: minima
 header_pages:
   - index.md
