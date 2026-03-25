@@ -7,7 +7,7 @@ Local-first persistent memory for Codex, implemented as a lightweight Rust daemo
 - [Operations](./operations)
 - [Platforms](./platforms)
 - [Testing](./testing)
-- [License](../LICENSE)
+- [License](https://github.com/alphaonedev/codex-memory/blob/main/LICENSE)
 
 ## For Non-Technical Users
 
