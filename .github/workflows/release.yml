@@ -1,0 +1,65 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: build-${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive_ext: tar.gz
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            archive_ext: tar.gz
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release binaries
+        run: cargo build --release --target ${{ matrix.target }}
+      - name: Package artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME:-manual}"
+          outdir="dist/codex-memory-${version}-${{ matrix.target }}"
+          mkdir -p "$outdir"
+          cp "target/${{ matrix.target }}/release/codex-memory" "$outdir/"
+          cp "target/${{ matrix.target }}/release/codex-memoryd" "$outdir/"
+          cp README.md LICENSE NOTICE "$outdir/"
+          if [[ "${{ matrix.archive_ext }}" == "tar.gz" ]]; then
+            tar -C dist -czf "${outdir}.tar.gz" "$(basename "$outdir")"
+          fi
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-memory-${{ matrix.target }}
+          path: dist/*.tar.gz
+
+  publish:
+    name: publish-release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Flatten artifacts
+        run: find dist -type f -name '*.tar.gz' -exec mv {} . \;
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "*.tar.gz"
+          generate_release_notes: true
