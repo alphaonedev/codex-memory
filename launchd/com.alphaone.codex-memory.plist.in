@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.alphaone.codex-memory</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>@CODEX_MEMORYD@</string>
+    <string>--config</string>
+    <string>@CONFIG_PATH@</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>RUST_LOG</key>
+    <string>info</string>
+  </dict>
+  <key>KeepAlive</key>
+  <true/>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>@LOG_DIR@/codex-memory.stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>@LOG_DIR@/codex-memory.stderr.log</string>
+</dict>
+</plist>

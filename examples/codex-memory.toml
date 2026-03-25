@@ -1,0 +1,4 @@
+bind = "127.0.0.1:7878"
+database_path = "/tmp/codex-memory/memory.db"
+default_limit = 8
+max_limit = 64

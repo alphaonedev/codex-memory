@@ -1,0 +1,49 @@
+:root {
+  --bg: #f4efe6;
+  --panel: #fffaf2;
+  --ink: #1f1b16;
+  --muted: #6f665d;
+  --accent: #b54d1e;
+  --line: #e4d7c8;
+}
+
+body {
+  background: linear-gradient(180deg, #f7f1e8 0%, #f1e7d8 100%);
+  color: var(--ink);
+}
+
+.site-header,
+.site-footer {
+  border-color: var(--line);
+}
+
+.page-content .wrapper,
+.site-header .wrapper,
+.site-footer .wrapper {
+  max-width: 920px;
+}
+
+.site-title {
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+a {
+  color: var(--accent);
+}
+
+code,
+pre {
+  border-radius: 10px;
+}
+
+pre {
+  background: #2c241f;
+  color: #f8f2ea;
+  padding: 1rem;
+}
+
+code {
+  background: rgba(181, 77, 30, 0.08);
+  padding: 0.1rem 0.3rem;
+}

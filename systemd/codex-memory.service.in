@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 AlphaOne LLC
+
+[Unit]
+Description=codex-memory localhost daemon
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=@CODEX_MEMORYD@ --config @CONFIG_PATH@
+Restart=on-failure
+RestartSec=2
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,12 @@
+title: codex-memory
+description: Lightweight Rust daemon and CLI for Codex local memory
+theme: minima
+header_pages:
+  - index.md
+  - getting-started.md
+  - quickstart.md
+  - operations.md
+  - platforms.md
+  - testing.md
+minima:
+  skin: auto
