@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ page.title }} | {{ site.title }}</title>
+  <meta name="description" content="{{ site.description }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ '/assets/main.css' | relative_url }}">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container nav-container">
+      <a href="{{ '/' | relative_url }}" class="logo">
+        <span class="logo-icon">A1</span>
+        <span class="logo-text">{{ site.title }}</span>
+      </a>
+      <button class="mobile-toggle" id="mobile-toggle" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+      <ul class="nav-links" id="nav-links">
+        {% for pg in site.header_pages %}
+          {% assign pg_obj = site.pages | where: "path", pg | first %}
+          {% if pg_obj %}
+          <li><a href="{{ pg_obj.url | relative_url }}"{% if page.url == pg_obj.url %} class="active"{% endif %}>{{ pg_obj.title }}</a></li>
+          {% endif %}
+        {% endfor %}
+      </ul>
+    </div>
+  </nav>
+
+  <main class="page-content">
+    <div class="container">
+      {{ content }}
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div class="footer-brand">
+        <a href="{{ '/' | relative_url }}" class="logo">
+          <span class="logo-icon">A1</span>
+          <span class="logo-text">{{ site.title }}</span>
+        </a>
+        <p class="footer-desc">{{ site.description }}</p>
+      </div>
+      <div class="footer-links">
+        <h4>Documentation</h4>
+        <ul>
+          {% for pg in site.header_pages %}
+            {% assign pg_obj = site.pages | where: "path", pg | first %}
+            {% if pg_obj %}
+            <li><a href="{{ pg_obj.url | relative_url }}">{{ pg_obj.title }}</a></li>
+            {% endif %}
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="footer-links">
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="https://github.com/alphaonedev/codex-memory">GitHub</a></li>
+          <li><a href="https://github.com/alphaonedev/codex-memory/blob/main/LICENSE">License</a></li>
+          <li><a href="https://www.alpha-one.mobi/">AlphaOne</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="container footer-bottom">
+      <p>&copy; {{ 'now' | date: '%Y' }} AlphaOne LLC. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script>
+    document.getElementById('mobile-toggle').addEventListener('click', function() {
+      document.getElementById('nav-links').classList.toggle('open');
+      this.classList.toggle('open');
+    });
+  </script>
+</body>
+</html>
